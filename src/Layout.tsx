@@ -1,0 +1,275 @@
+import React from "react";
+import {
+  IconButton,
+  Box,
+  CloseButton,
+  Flex,
+  Icon,
+  useColorModeValue,
+  Drawer,
+  DrawerContent,
+  Text,
+  useDisclosure,
+  Button,
+  Image,
+  Divider,
+  Avatar,
+} from "@chakra-ui/react";
+import { BiLogOut, BiNotepad } from "react-icons/bi";
+import { FiMenu } from "react-icons/fi";
+import { LuCalendarDays, LuLayoutDashboard } from "react-icons/lu";
+import { FaRegUser } from "react-icons/fa";
+import { IoSettingsOutline } from "react-icons/io5";
+import { AiOutlineSearch } from "react-icons/ai";
+import { MdOutlineNotifications } from "react-icons/md";
+import { PiStethoscopeFill } from "react-icons/pi";
+import { TbReportAnalytics } from "react-icons/tb";
+import { useNavigate, useLocation } from "react-router-dom";
+import Logo from "./assets/logo_name.jpeg";
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+interface SidebarLink {
+  name: string;
+  icon: React.ElementType;
+  path: string;
+  active: boolean;
+  roles: string[];
+}
+
+interface NavItemProps {
+  icon: React.ElementType;
+  path: string;
+  onClose: () => void;
+  active: boolean;
+  children: React.ReactNode;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  return (
+    <Box minH="100vh">
+      <Header onOpen={onOpen} />
+      <SidebarContent
+        onClose={onClose}
+        display={{ base: "none", md: "block" }}
+      />
+      <Drawer
+        autoFocus={false}
+        isOpen={isOpen}
+        placement="left"
+        onClose={onClose}
+        returnFocusOnClose={false}
+        onOverlayClick={onClose}
+        size="full"
+      >
+        <DrawerContent>
+          <SidebarContent onClose={onClose} />
+        </DrawerContent>
+      </Drawer>
+      <Box ml={{ base: 0, md: 60 }} pt="80px" h="100vh" bgColor="#F6F7F9">
+        <Box
+          minH="calc(100% - 1.5rem)"
+          m={3}
+          p={4}
+          bgColor="#fff"
+          borderRadius="5px"
+        >
+          {children}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+interface HeaderProps {
+  onOpen: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onOpen }) => {
+  const location = useLocation();
+  const { pathname } = location;
+
+  const getPageTitle = () => {
+    if (pathname.includes("/customer")) return "Customer";
+    if (pathname.includes("/invoice")) return "Invoice";
+    return "Dashboard";
+  };
+
+  return (
+    <Box
+      display="flex"
+      position="fixed"
+      justifyContent="space-between"
+      width="100%"
+      borderBottom="1px"
+      borderBottomColor={useColorModeValue("gray.200", "gray.700")}
+      bgColor="#fff"
+      zIndex="999"
+    >
+      <Box display="flex">
+        <Box
+          alignItems="center"
+          px={{ base: 2, md: 10 }}
+          py="3"
+          bg={useColorModeValue("white", "gray.900")}
+          borderRight="1px"
+          borderRightColor={useColorModeValue("gray.200", "gray.700")}
+          w={{ base: 14, md: 60 }}
+        >
+          <Image
+            src={Logo}
+            alt="Logo"
+            height="50px"
+            display={{ base: "none", md: "block" }}
+          />
+          <IconButton
+            variant="outline"
+            colorScheme="teal"
+            onClick={onOpen}
+            aria-label="open menu"
+            display={{ base: "flex", md: "none" }}
+            icon={<FiMenu />}
+          />
+        </Box>
+        <Text fontSize="2xl" p="5" fontFamily="monospace" fontWeight="bold">
+          {getPageTitle()}
+        </Text>
+      </Box>
+      <Box display="flex" alignItems="center">
+        <Divider
+          orientation="vertical"
+          height="40px"
+          mx={3}
+          display={{ base: "none", md: "flex" }}
+        />
+        <Flex align="center" p={4} width="fit-content">
+          <Avatar name="Aswath M" src={""} size="sm" />
+          <Box mx={2}>
+            <Text fontSize="sm" fontWeight="bold">
+              Aswath M
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
+    </Box>
+  );
+};
+
+interface SidebarContentProps {
+  onClose: () => void;
+  display?: any;
+}
+
+const SidebarContent: React.FC<SidebarContentProps> = ({ onClose, ...rest }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { pathname } = location;
+
+  const LinkItems: SidebarLink[] = [
+    {
+      name: "Customer",
+      icon: LuLayoutDashboard,
+      path: "/customer",
+      active: pathname.includes("/customer"),
+      roles: ["ADMIN"],
+    },
+    {
+      name: "Invoice",
+      icon: BiNotepad,
+      path: "/invoice",
+      active: pathname.includes("/invoice"),
+      roles: ["ADMIN"],
+    },
+  ];
+
+  return (
+    <Box
+      bg={useColorModeValue("white", "gray.900")}
+      w={{ base: "full", md: 60 }}
+      mt={{ base: 0, md: 81 }}
+      pos="fixed"
+      h="full"
+      {...rest}
+    >
+      <Flex
+        alignItems="center"
+        px="10"
+        py="3"
+        justifyContent="space-between"
+        borderBottom="1px"
+        borderBottomColor={useColorModeValue("gray.200", "gray.700")}
+        display={{ base: "flex", md: "none" }}
+      >
+        <Image src={Logo} alt="Logo" height="50px" />
+        <CloseButton display={{ base: "flex", md: "none" }} onClick={onClose} />
+      </Flex>
+      {LinkItems.map(
+        (link) =>
+          link.roles.includes("ADMIN") && (
+            <NavItem
+              key={link.name}
+              icon={link.icon}
+              onClose={onClose}
+              path={link.path}
+              active={link.active}
+              roles={link.roles}
+            >
+              {link.name}
+            </NavItem>
+          )
+      )}
+    </Box>
+  );
+};
+
+const NavItem: React.FC<NavItemProps> = ({ icon, path, onClose, active, children, ...rest }) => {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    if (!active) {
+      navigate(path);
+    }
+    onClose();
+  };
+
+  return (
+    <Box
+      onClick={handleClick}
+      style={{ textDecoration: "none" }}
+      _focus={{ boxShadow: "none" }}
+    >
+      <Flex
+        align="center"
+        p="3"
+        mx="4"
+        my="2"
+        borderRadius="md"
+        role="group"
+        cursor="pointer"
+        _hover={{
+          bg: active ? "#03ABAC" : "#f0ffff",
+        }}
+        bg={active ? "#03ABAC" : "white"}
+        color={active ? "white" : "black"}
+        {...rest}
+      >
+        {icon && (
+          <Icon
+            mr="4"
+            fontSize="18"
+            _groupHover={{
+              color: active ? "white" : "black",
+            }}
+            as={icon}
+          />
+        )}
+        {children}
+      </Flex>
+    </Box>
+  );
+};
+
+export default Layout;
