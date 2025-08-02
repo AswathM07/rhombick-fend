@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Box,
   Button,
@@ -12,19 +12,14 @@ import {
   useToast,
   Textarea,
   Divider,
+  FormErrorMessage,
+  FormHelperText,
 } from "@chakra-ui/react";
-import { ErrorMessage, Form, Formik } from "formik";
+import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import {
-  Country,
-  State,
-  City,
-  ICountry,
-  IState,
-  ICity,
-} from "country-state-city";
+import { Country, State, City, ICountry, IState, ICity } from "country-state-city";
 
 interface RouteParams {
   id?: string;
@@ -72,7 +67,7 @@ const NewCustomer: React.FC = () => {
     },
   });
 
-  const fetchCustomerForId = async () => {
+  const fetchCustomerForId = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await axios.get(
@@ -87,15 +82,15 @@ const NewCustomer: React.FC = () => {
             return isNaN(num) ? 0 : num;
           })
         );
-        setInitialValues({
-          ...initialValues,
-          customerId: maxNumber ? `CUST${(maxNumber + 1).toString().padStart(3, '0')}` : "CUST001",
-        });
+        setInitialValues((prev) => ({
+          ...prev,
+          customerId: `CUST${(maxNumber + 1).toString().padStart(3, '0')}`,
+        }));
       } else {
-        setInitialValues({
-          ...initialValues,
+        setInitialValues((prev) => ({
+          ...prev,
           customerId: "CUST001",
-        });
+        }));
       }
     } catch (error) {
       toast({
@@ -109,7 +104,7 @@ const NewCustomer: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     const countries = Country.getAllCountries();
@@ -117,58 +112,92 @@ const NewCustomer: React.FC = () => {
     if (!id) {
       fetchCustomerForId();
     }
-  }, []);
+  }, [id, fetchCustomerForId]);
+
+  const fetchCustomer = useCallback(async () => {
+    if (id) {
+      try {
+        setIsLoading(true);
+        const res = await axios.get(
+          `https://rhombick-bend.onrender.com/api/customers/${id}`
+        );
+        const data = res.data;
+        
+        // Handle both manager object and managerName string
+        const managerName = data.manager 
+          ? `${data.manager.firstName} ${data.manager.lastName || ""}`.trim()
+          : data.managerName || "";
+
+        setInitialValues({
+          customerId: data.customerId || "",
+          customerName: data.customerName || "",
+          managerName: managerName,
+          email: data.email || "",
+          phoneNumber: data.phoneNumber?.toString() || "",
+          gstNumber: data.gstNumber || "",
+          address: {
+            country: data.address?.country || "",
+            state: data.address?.state || "",
+            city: data.address?.city || "",
+            postalCode: data.address?.postalCode || "",
+            street: data.address?.street || "",
+          },
+        });
+
+        // Load states if country is set
+        if (data.address?.country) {
+          const states = State.getStatesOfCountry(data.address.country);
+          setStateList(states);
+        }
+
+        // Load cities if state is set
+        if (data.address?.state && data.address?.country) {
+          const cities = City.getCitiesOfState(
+            data.address.country,
+            data.address.state
+          );
+          setCityList(cities);
+        }
+      } catch (err) {
+        toast({
+          title: "Failed to fetch customer",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+          position: "top-right",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [id, toast]);
 
   useEffect(() => {
-    const fetchCustomer = async () => {
-      if (id) {
-        try {
-          const res = await axios.get(
-            `https://rhombick-bend.onrender.com/api/customers/${id}`
-          );
-          const data = res.data;
-          setInitialValues({
-            customerId: data.customerId || "",
-            customerName: data.customerName || "",
-            managerName: data.manager
-              ? `${data.manager.firstName} ${data.manager.lastName || ""}`.trim()
-              : "",
-            email: data.email || "",
-            phoneNumber: data.phoneNumber?.toString() || "",
-            gstNumber: data.gstNumber || "",
-            address: {
-              country: data.address?.country || "",
-              state: data.address?.state || "",
-              city: data.address?.city || "",
-              postalCode: data.address?.postalCode || "",
-              street: data.address?.street || "",
-            },
-          });
-        } catch (err) {
-          toast({
-            title: "Failed to fetch customer",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-            position: "top-right",
-          });
-        }
-      }
-    };
-
     fetchCustomer();
-  }, [id]);
+  }, [fetchCustomer]);
 
   const handleSubmit = async (values: FormValues) => {
     try {
       setIsLoading(true);
       
-      const managerNameParts = values.managerName?.split(' ') || [];
-      const manager = values.managerName ? {
-        firstName: managerNameParts[0],
-        lastName: managerNameParts.slice(1).join(' ') || ''
-      } : undefined;
-      
+      // Format manager data - handle both first/last name and full name string
+      const managerNameParts = values.managerName?.trim().split(/\s+/) || [];
+      const manager = values.managerName 
+        ? {
+            firstName: managerNameParts[0] || '',
+            lastName: managerNameParts.length > 1 ? managerNameParts.slice(1).join(' ') : undefined
+          }
+        : undefined;
+
+      // Ensure address fields are properly formatted
+      const address = {
+        country: values.address.country,
+        state: values.address.state,
+        city: values.address.city,
+        postalCode: values.address.postalCode,
+        street: values.address.street
+      };
+
       const payload = {
         customerId: values.customerId,
         customerName: values.customerName,
@@ -176,39 +205,41 @@ const NewCustomer: React.FC = () => {
         phoneNumber: Number(values.phoneNumber),
         gstNumber: values.gstNumber,
         manager: manager,
-        address: values.address
+        address: address
       };
 
-      if (id) {
-        await axios.put(
-          `https://rhombick-bend.onrender.com/api/customers/${id}`,
-          payload
-        );
-      } else {
-        await axios.post(
-          "https://rhombick-bend.onrender.com/api/customers",
-          payload
-        );
-      }
+      console.log("Submitting payload:", payload); // Debug log
+
+      const response = id
+        ? await axios.put(
+            `https://rhombick-bend.onrender.com/api/customers/${id}`,
+            payload
+          )
+        : await axios.post(
+            "https://rhombick-bend.onrender.com/api/customers",
+            payload
+          );
+
       toast({
-        title: id
-          ? "Customer updated successfully"
-          : "Customer added successfully",
+        title: id ? "Customer updated successfully" : "Customer added successfully",
         status: "success",
         duration: 3000,
         isClosable: true,
         position: "top-right",
       });
       navigate("/customer");
-    } catch (err) {
-      setIsLoading(false);
+    } catch (err: any) {
+      console.error("Submission error:", err.response?.data);
       toast({
         title: id ? "Update failed" : "Customer creation failed",
+        description: err.response?.data?.message || "Please check all required fields",
         status: "error",
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
         position: "top-right",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -216,18 +247,22 @@ const NewCustomer: React.FC = () => {
     customerId: Yup.string().required("Customer ID is required"),
     customerName: Yup.string().required("Customer Name is required"),
     managerName: Yup.string().required("Manager Name is required"),
-    email: Yup.string().email().required("Email is required"),
+    email: Yup.string()
+      .email("Invalid email format")
+      .required("Email is required"),
     phoneNumber: Yup.string()
       .required("Phone number is required")
       .matches(/^\d{10}$/, "Phone number must be 10 digits"),
     gstNumber: Yup.string()
       .required("GST number is required")
-      .matches(/^\d{10}$/, "GST number must be 10 digits"),
+      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GST format (e.g., 22ABCDE1234F1Z5)"),
     address: Yup.object().shape({
       country: Yup.string().required("Country is required"),
       state: Yup.string().required("State is required"),
       city: Yup.string().required("City is required"),
-      postalCode: Yup.string().required("Postal Code is required"),
+      postalCode: Yup.string()
+        .required("Postal Code is required")
+        .matches(/^\d{6}$/, "Must be 6 digits"),
       street: Yup.string().required("Street is required"),
     }),
   });
@@ -245,7 +280,7 @@ const NewCustomer: React.FC = () => {
         validationSchema={validationSchema}
         onSubmit={handleSubmit}
       >
-        {({ values, handleChange }) => (
+        {({ values, setFieldValue, isSubmitting, touched, errors }) => (
           <Form>
             <Grid
               templateColumns={{
@@ -256,110 +291,81 @@ const NewCustomer: React.FC = () => {
               gap={4}
             >
               <Box>
-                <FormControl mt={4}>
-                  <FormLabel>Customer Id</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="customerId"
-                      type="text"
-                      onChange={handleChange}
-                      value={values.customerId}
-                      disabled
-                    />
-                    <ErrorMessage
-                      name="customerId"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
-                <FormControl mt={4}>
-                  <FormLabel>Customer Name</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="customerName"
-                      type="text"
-                      onChange={handleChange}
-                      placeholder="Enter Customer Name"
-                      value={values.customerName}
-                    />
-                    <ErrorMessage
-                      name="customerName"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
-                <FormControl mt={4}>
-                  <FormLabel>Manager Name</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="managerName"
-                      type="text"
-                      onChange={handleChange}
-                      placeholder="Enter Manager Name"
-                      value={values.managerName}
-                    />
-                    <ErrorMessage
-                      name="managerName"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
+                <Field name="customerId">
+                  {({ field, meta }: any) => (
+                    <FormControl isInvalid={meta.touched && meta.error}>
+                      <FormLabel>Customer ID</FormLabel>
+                      <Input {...field} isDisabled />
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
+
+                <Field name="customerName">
+                  {({ field, meta }: any) => (
+                    <FormControl mt={4} isInvalid={meta.touched && meta.error}>
+                      <FormLabel>Customer Name</FormLabel>
+                      <Input {...field} placeholder="Enter Customer Name" />
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
+
+                <Field name="managerName">
+                  {({ field, meta }: any) => (
+                    <FormControl mt={4} isInvalid={meta.touched && meta.error}>
+                      <FormLabel>Manager Name</FormLabel>
+                      <Input 
+                        {...field} 
+                        placeholder="Firstname Lastname" 
+                        onChange={(e) => {
+                          // Normalize whitespace
+                          const value = e.target.value.replace(/\s+/g, ' ').trim();
+                          field.onChange({
+                            target: {
+                              name: field.name,
+                              value: value
+                            }
+                          });
+                        }}
+                      />
+                      <FormHelperText>Enter full name (first and last name)</FormHelperText>
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
               </Box>
               <Box>
-                <FormControl mt={4}>
-                  <FormLabel>Email</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="email"
-                      type="email"
-                      placeholder="Enter email address"
-                      onChange={handleChange}
-                      value={values.email}
-                    />
-                    <ErrorMessage
-                      name="email"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
-                <FormControl mt={4}>
-                  <FormLabel>Phone Number</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="phoneNumber"
-                      type="text"
-                      placeholder="Enter Phone Number"
-                      onChange={handleChange}
-                      value={values.phoneNumber}
-                    />
-                    <ErrorMessage
-                      name="phoneNumber"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
-                <FormControl mt={4}>
-                  <FormLabel>GST Number</FormLabel>
-                  <Box w="100%">
-                    <Input
-                      name="gstNumber"
-                      type="text"
-                      placeholder="Enter GST Number"
-                      onChange={handleChange}
-                      value={values.gstNumber}
-                    />
-                    <ErrorMessage
-                      name="gstNumber"
-                      component="div"
-                      className="error"
-                    />
-                  </Box>
-                </FormControl>
+                <Field name="email">
+                  {({ field, meta }: any) => (
+                    <FormControl mt={4} isInvalid={meta.touched && meta.error}>
+                      <FormLabel>Email</FormLabel>
+                      <Input {...field} type="email" placeholder="Enter email address" />
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
+
+                <Field name="phoneNumber">
+                  {({ field, meta }: any) => (
+                    <FormControl mt={4} isInvalid={meta.touched && meta.error}>
+                      <FormLabel>Phone Number</FormLabel>
+                      <Input {...field} placeholder="Enter 10-digit Phone Number" />
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
+
+                <Field name="gstNumber">
+                  {({ field, meta }: any) => (
+                    <FormControl mt={4} isInvalid={meta.touched && meta.error}>
+                      <FormLabel>GST Number</FormLabel>
+                      <Input {...field} placeholder="Enter GST Number (e.g., 22ABCDE1234F1Z5)" />
+                      <FormHelperText>Format: 22ABCDE1234F1Z5</FormHelperText>
+                      <FormErrorMessage>{meta.error}</FormErrorMessage>
+                    </FormControl>
+                  )}
+                </Field>
               </Box>
             </Grid>
             <Divider my={6} />
@@ -371,119 +377,111 @@ const NewCustomer: React.FC = () => {
               templateColumns={{ base: "repeat(1, 1fr)", md: "repeat(2, 1fr)" }}
               gap={4}
             >
-              <FormControl>
-                <FormLabel>Country</FormLabel>
-                <Select
-                  name="address.country"
-                  placeholder="Select Country"
-                  value={values.address.country}
-                  onChange={(e) => {
-                    handleChange(e);
-                    const selectedCountryCode = e.target.value;
-                    const states =
-                      State.getStatesOfCountry(selectedCountryCode);
-                    setStateList(states);
-                    setCityList([]);
-                  }}
-                >
-                  {countryList.map((country) => (
-                    <option key={country.isoCode} value={country.isoCode}>
-                      {country.name}
-                    </option>
-                  ))}
-                </Select>
-                <ErrorMessage
-                  name="address.country"
-                  component="div"
-                  className="error"
-                />
-              </FormControl>
+              <Field name="address.country">
+                {({ field, meta }: any) => (
+                  <FormControl isInvalid={meta.touched && meta.error}>
+                    <FormLabel>Country</FormLabel>
+                    <Select
+                      {...field}
+                      placeholder="Select Country"
+                      onChange={(e) => {
+                        setFieldValue("address.country", e.target.value);
+                        setFieldValue("address.state", "");
+                        setFieldValue("address.city", "");
+                        const states = State.getStatesOfCountry(e.target.value);
+                        setStateList(states);
+                        setCityList([]);
+                      }}
+                    >
+                      {countryList.map((country) => (
+                        <option key={country.isoCode} value={country.isoCode}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <FormErrorMessage>{meta.error}</FormErrorMessage>
+                  </FormControl>
+                )}
+              </Field>
 
-              <FormControl>
-                <FormLabel>State</FormLabel>
-                <Select
-                  name="address.state"
-                  placeholder="Select State"
-                  value={values.address.state}
-                  onChange={(e) => {
-                    handleChange(e);
-                    const selectedStateCode = e.target.value;
-                    const cities = City.getCitiesOfState(
-                      values.address.country,
-                      selectedStateCode
-                    );
-                    setCityList(cities);
-                  }}
-                >
-                  {stateList.map((state) => (
-                    <option key={state.isoCode} value={state.isoCode}>
-                      {state.name}
-                    </option>
-                  ))}
-                </Select>
-                <ErrorMessage
-                  name="address.state"
-                  component="div"
-                  className="error"
-                />
-              </FormControl>
+              <Field name="address.state">
+                {({ field, meta }: any) => (
+                  <FormControl isInvalid={meta.touched && meta.error}>
+                    <FormLabel>State</FormLabel>
+                    <Select
+                      {...field}
+                      placeholder="Select State"
+                      isDisabled={!values.address.country}
+                      onChange={(e) => {
+                        setFieldValue("address.state", e.target.value);
+                        setFieldValue("address.city", "");
+                        const cities = City.getCitiesOfState(
+                          values.address.country,
+                          e.target.value
+                        );
+                        setCityList(cities);
+                      }}
+                    >
+                      {stateList.map((state) => (
+                        <option key={state.isoCode} value={state.isoCode}>
+                          {state.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <FormErrorMessage>{meta.error}</FormErrorMessage>
+                  </FormControl>
+                )}
+              </Field>
 
-              <FormControl>
-                <FormLabel>City</FormLabel>
-                <Select
-                  name="address.city"
-                  placeholder="Select City"
-                  value={values.address.city}
-                  onChange={handleChange}
-                >
-                  {cityList.map((city, idx) => (
-                    <option key={idx} value={city.name}>
-                      {city.name}
-                    </option>
-                  ))}
-                </Select>
-                <ErrorMessage
-                  name="address.city"
-                  component="div"
-                  className="error"
-                />
-              </FormControl>
+              <Field name="address.city">
+                {({ field, meta }: any) => (
+                  <FormControl isInvalid={meta.touched && meta.error}>
+                    <FormLabel>City</FormLabel>
+                    <Select
+                      {...field}
+                      placeholder="Select City"
+                      isDisabled={!values.address.state}
+                    >
+                      {cityList.map((city, idx) => (
+                        <option key={idx} value={city.name}>
+                          {city.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <FormErrorMessage>{meta.error}</FormErrorMessage>
+                  </FormControl>
+                )}
+              </Field>
 
-              <FormControl>
-                <FormLabel>Postal Code</FormLabel>
-                <Input
-                  name="address.postalCode"
-                  placeholder="Enter Postal Code"
-                  value={values.address.postalCode}
-                  onChange={handleChange}
-                />
-                <ErrorMessage
-                  name="address.postalCode"
-                  component="div"
-                  className="error"
-                />
-              </FormControl>
+              <Field name="address.postalCode">
+                {({ field, meta }: any) => (
+                  <FormControl isInvalid={meta.touched && meta.error}>
+                    <FormLabel>Postal Code</FormLabel>
+                    <Input 
+                      {...field} 
+                      placeholder="Enter 6-digit Postal Code" 
+                      maxLength={6}
+                    />
+                    <FormErrorMessage>{meta.error}</FormErrorMessage>
+                  </FormControl>
+                )}
+              </Field>
 
-              <FormControl gridColumn="span 2">
-                <FormLabel>Street</FormLabel>
-                <Textarea
-                  name="address.street"
-                  placeholder="Enter Street"
-                  value={values.address.street}
-                  onChange={handleChange}
-                />
-                <ErrorMessage
-                  name="address.street"
-                  component="div"
-                  className="error"
-                />
-              </FormControl>
+              <Field name="address.street">
+                {({ field, meta }: any) => (
+                  <FormControl gridColumn="span 2" isInvalid={meta.touched && meta.error}>
+                    <FormLabel>Street Address</FormLabel>
+                    <Textarea {...field} placeholder="Enter full street address" />
+                    <FormErrorMessage>{meta.error}</FormErrorMessage>
+                  </FormControl>
+                )}
+              </Field>
             </Grid>
             <Flex justify="flex-end" mt={6} mb={4}>
               <Button
                 variant="outline"
-                type="reset"
                 onClick={() => navigate("/customer")}
+                mr={2}
               >
                 Cancel
               </Button>
@@ -492,8 +490,9 @@ const NewCustomer: React.FC = () => {
                 color="white"
                 _hover={{ bg: "gray.800" }}
                 type="submit"
-                ml={2}
-                isLoading={isLoading}
+                isLoading={isLoading || isSubmitting}
+                loadingText={id ? "Updating..." : "Saving..."}
+                disabled={isLoading || isSubmitting}
               >
                 {id ? "Update" : "Save"}
               </Button>

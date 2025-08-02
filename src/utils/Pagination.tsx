@@ -19,11 +19,11 @@ const Pagination: React.FC<PaginationProps> = ({
   onRowsPerPageChange,
 }) => {
   const totalPages = Math.ceil(totalItems / rowsPerPage);
-  const start = (currentPage - 1) * rowsPerPage + 1;
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
   const end = Math.min(totalItems, currentPage * rowsPerPage);
 
   const handlePrev = () => {
-    if (currentPage > 0) {
+    if (currentPage > 1) {
       onPageChange(currentPage - 1);
     }
   };
@@ -59,7 +59,7 @@ const Pagination: React.FC<PaginationProps> = ({
         icon={<ChevronLeftIcon />}
         size="sm"
         onClick={handlePrev}
-        isDisabled={currentPage === 1}
+        isDisabled={currentPage === 1 || totalItems === 0}
         variant="ghost"
       />
       <IconButton
@@ -67,7 +67,7 @@ const Pagination: React.FC<PaginationProps> = ({
         icon={<ChevronRightIcon />}
         size="sm"
         onClick={handleNext}
-        isDisabled={currentPage >= totalPages}
+        isDisabled={currentPage >= totalPages || totalItems === 0}
         variant="ghost"
       />
     </Flex>
