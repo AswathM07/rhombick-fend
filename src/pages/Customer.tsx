@@ -10,6 +10,7 @@ import {
   Button,
   Flex,
   IconButton,
+  Image,
   Input,
   Spinner,
   Table,
@@ -23,28 +24,24 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
-import { useNavigate } from "react-router-dom";
+import { useHistory } from "react-router-dom";
 import axios from "axios";
 import Pagination from "../utils/Pagination";
 import { debounce } from "lodash";
+import { API_BASE_URL } from "../constant";
 
 interface CustomerType {
   _id: string;
   customerId: string;
   customerName: string;
   email: string;
-  phoneNumber: number;
-  gstNumber?: string;
-  manager?: {
-    firstName: string;
-    lastName?: string;
-  };
+  phoneNumber: string;
+  gstNumber: string;
+  managerName?: string;
 }
 
 const Customer = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [allCustomers, setAllCustomers] = useState<CustomerType[]>([]);
   const [customerList, setCustomerList] = useState<CustomerType[]>([]);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -54,35 +51,13 @@ const Customer = () => {
   const [totalItems, setTotalItems] = useState(0);
 
   const cancelRef = useRef(null);
-  const navigate = useNavigate();
-  const toast = useToast();
 
-  const filterCustomers = (customers: CustomerType[], term: string) => {
-    if (!term) {
-      setCustomerList(customers);
-      setTotalItems(customers.length);
-      return;
-    }
-    
-    const filtered = customers.filter(customer => 
-      customer.customerName.toLowerCase().includes(term.toLowerCase()) ||
-      customer.customerId.toLowerCase().includes(term.toLowerCase()) ||
-      customer.email.toLowerCase().includes(term.toLowerCase()) ||
-      (customer.manager && 
-        `${customer.manager.firstName} ${customer.manager.lastName || ''}`
-          .toLowerCase()
-          .includes(term.toLowerCase())) ||
-      customer.phoneNumber.toString().includes(term) ||
-      (customer.gstNumber && customer.gstNumber.includes(term))
-    );
-    
-    setCustomerList(filtered);
-    setTotalItems(filtered.length);
-  };
+  const history = useHistory();
+  const toast = useToast();
 
   const debouncedSearch = useRef(
     debounce((val: string) => {
-      filterCustomers(allCustomers, val);
+      setSearchTerm(val);
       setCurrentPage(1);
     }, 500)
   ).current;
@@ -90,14 +65,14 @@ const Customer = () => {
   const fetchCustomer = async () => {
     try {
       setIsLoading(true);
-      setError(null);
-      const response = await axios.get(
-        "https://rhombick-bend.onrender.com/api/customers"
+      const response = await axios(
+        `${API_BASE_URL}/customers?page=${currentPage}&limit=${rowsPerPage}&search=${searchTerm}`
       );
-      setAllCustomers(response.data);
-      filterCustomers(response.data, searchTerm);
+
+      console.log(response.data);
+      setCustomerList(response?.data);
+      // setTotalItems(response.data.pagination.total);
     } catch (error) {
-      setError(error);
       toast({
         title: "Failed to fetch customer details",
         status: "error",
@@ -113,14 +88,11 @@ const Customer = () => {
 
   useEffect(() => {
     fetchCustomer();
-    return () => {
-      debouncedSearch.cancel();
-    };
-  }, []);
+  }, [currentPage, rowsPerPage, searchTerm]);
 
   const handleDelete = async (id: string) => {
     try {
-      await axios.delete(`https://rhombick-bend.onrender.com/api/customers/${id}`);
+      await axios.delete(`${API_BASE_URL}/customers/${id}`);
       toast({
         title: "Customer deleted",
         status: "success",
@@ -130,8 +102,10 @@ const Customer = () => {
       });
       fetchCustomer();
     } catch (error) {
+      const errorMsg = error?.response?.data?.error?.[0];
       toast({
         title: "Failed to delete customer",
+        description: errorMsg ?? "",
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -142,7 +116,6 @@ const Customer = () => {
       setIsDeleteAlertOpen(false);
     }
   };
-
   return (
     <Box>
       <Flex justifyContent="space-between" mb={4}>
@@ -154,10 +127,7 @@ const Customer = () => {
             <Input
               size="sm"
               placeholder="Search customer..."
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                debouncedSearch(e.target.value);
-              }}
+              onChange={(e) => debouncedSearch(e.target.value)}
             />
             <Button
               variant="solid"
@@ -166,7 +136,7 @@ const Customer = () => {
               color="white"
               _hover={{ bg: "gray.800" }}
               leftIcon={<AddIcon />}
-              onClick={() => navigate("/customer/new")}
+              onClick={() => history.push("/customer/new-customer")}
             >
               New
             </Button>
@@ -190,62 +160,52 @@ const Customer = () => {
             <Tbody>
               {isLoading ? (
                 <Tr>
-                  <Td colSpan={7} textAlign="center">
+                  <Td colSpan={6} rowSpan={5} textAlign="center">
                     <Spinner size="lg" />
-                  </Td>
-                </Tr>
-              ) : error ? (
-                <Tr>
-                  <Td colSpan={7} textAlign="center" color="red.500">
-                    Failed to load data
                   </Td>
                 </Tr>
               ) : customerList.length === 0 ? (
                 <Tr>
-                  <Td colSpan={7} textAlign="center">
+                  <Td colSpan={6} rowSpan={5} textAlign="center">
                     No Data Found
                   </Td>
                 </Tr>
               ) : (
-                customerList
-                  .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
-                  .map((item, i) => {
-                    return (
-                      <Tr key={i}>
-                        <Td>{item.customerId}</Td>
-                        <Td>{item.customerName}</Td>
-                        <Td>
-                          {item.manager
-                            ? `${item.manager.firstName} ${item.manager.lastName || ""}`.trim()
-                            : "-"}
-                        </Td>
-                        <Td>{item.email}</Td>
-                        <Td>{item.phoneNumber}</Td>
-                        <Td>{item.gstNumber || "-"}</Td>
-                        <Td>
-                          <Flex gap={2}>
-                            <IconButton
-                              aria-label="Edit"
-                              icon={<EditIcon />}
-                              variant="ghost"
-                              onClick={() =>
-                                navigate(`/customer/edit/${item._id}`)
-                              }
-                            />
-                            <IconButton
-                              aria-label="Delete"
-                              icon={<DeleteIcon />}
-                              variant="ghost"
-                              onClick={() => {
-                                setDeleteId(item._id);
-                                setIsDeleteAlertOpen(true);
-                              }}
-                            />
-                          </Flex>
-                        </Td>
-                      </Tr>
-                    );
-                  })
+                customerList?.map((item, i) => {
+                  return (
+                    <Tr key={i}>
+                      <Td>{item.customerId}</Td>
+                      <Td>{item.customerName}</Td>
+                      <Td>{item.managerName ?? "-"}</Td>
+                      <Td>{item.email}</Td>
+                      <Td>{item.phoneNumber}</Td>
+                      <Td>{item.gstNumber ?? "-"}</Td>
+                      <Td>
+                        <Flex gap={2}>
+                          <IconButton
+                            aria-label="Edit"
+                            icon={<EditIcon />}
+                            variant="ghost"
+                            onClick={() =>
+                              history.push(
+                                `/customer/new-customer/${item?._id}`
+                              )
+                            }
+                          />
+                          <IconButton
+                            aria-label="Delete"
+                            icon={<DeleteIcon />}
+                            variant="ghost"
+                            onClick={() => {
+                              setDeleteId(item._id);
+                              setIsDeleteAlertOpen(true);
+                            }}
+                          />
+                        </Flex>
+                      </Td>
+                    </Tr>
+                  );
+                })
               )}
             </Tbody>
           </Table>

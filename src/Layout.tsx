@@ -24,36 +24,16 @@ import { AiOutlineSearch } from "react-icons/ai";
 import { MdOutlineNotifications } from "react-icons/md";
 import { PiStethoscopeFill } from "react-icons/pi";
 import { TbReportAnalytics } from "react-icons/tb";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import Logo from "./assets/logo_name.jpeg";
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-interface SidebarLink {
-  name: string;
-  icon: React.ElementType;
-  path: string;
-  active: boolean;
-  roles: string[];
-}
-
-interface NavItemProps {
-  icon: React.ElementType;
-  path: string;
-  onClose: () => void;
-  active: boolean;
-  children: React.ReactNode;
-}
-
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout = ({ children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   return (
     <Box minH="100vh">
       <Header onOpen={onOpen} />
       <SidebarContent
-        onClose={onClose}
+        onClose={() => onClose}
         display={{ base: "none", md: "block" }}
       />
       <Drawer
@@ -84,20 +64,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 };
 
-interface HeaderProps {
-  onOpen: () => void;
-}
-
-const Header: React.FC<HeaderProps> = ({ onOpen }) => {
+const Header = ({ onOpen }) => {
   const location = useLocation();
   const { pathname } = location;
-
-  const getPageTitle = () => {
-    if (pathname.includes("/customer")) return "Customer";
-    if (pathname.includes("/invoice")) return "Invoice";
-    return "Dashboard";
-  };
-
   return (
     <Box
       display="flex"
@@ -135,7 +104,11 @@ const Header: React.FC<HeaderProps> = ({ onOpen }) => {
           />
         </Box>
         <Text fontSize="2xl" p="5" fontFamily="monospace" fontWeight="bold">
-          {getPageTitle()}
+          {pathname.includes("/customer")
+            ? "Customer"
+            : pathname.includes("/invoice")
+            ? "Invoice"
+            : "Customer"}
         </Text>
       </Box>
       <Box display="flex" alignItems="center">
@@ -146,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({ onOpen }) => {
           display={{ base: "none", md: "flex" }}
         />
         <Flex align="center" p={4} width="fit-content">
-          <Avatar name="Aswath M" src={""} size="sm" />
+          <Avatar name={`Aswath M`} src={""} size="sm" />
           <Box mx={2}>
             <Text fontSize="sm" fontWeight="bold">
               Aswath M
@@ -158,17 +131,11 @@ const Header: React.FC<HeaderProps> = ({ onOpen }) => {
   );
 };
 
-interface SidebarContentProps {
-  onClose: () => void;
-  display?: any;
-}
-
-const SidebarContent: React.FC<SidebarContentProps> = ({ onClose, ...rest }) => {
+const SidebarContent = ({ onClose, ...rest }) => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const history = useHistory();
   const { pathname } = location;
-
-  const LinkItems: SidebarLink[] = [
+  const LinkItems = [
     {
       name: "Customer",
       icon: LuLayoutDashboard,
@@ -184,7 +151,11 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ onClose, ...rest }) => 
       roles: ["ADMIN"],
     },
   ];
-
+  // const handleLogout = (onClose) => {
+  //   onClose();
+  //   localStorage.clear();
+  //   history.push("/login");
+  // };
   return (
     <Box
       bg={useColorModeValue("white", "gray.900")}
@@ -221,23 +192,29 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ onClose, ...rest }) => 
             </NavItem>
           )
       )}
+      {/* <Button
+        colorScheme="teal"
+        variant="ghost"
+        display={"flex"}
+        position={"absolute"}
+        bottom={"80px"}
+        w={"100%"}
+        bg={"#f0ffff"}
+        justifyContent={"left"}
+        onClick={() => handleLogout(onClose)}
+      >
+        <BiLogOut size={18} style={{ marginRight: "10px", marginTop: "3px" }} />
+        Logout
+      </Button> */}
     </Box>
   );
 };
 
-const NavItem: React.FC<NavItemProps> = ({ icon, path, onClose, active, children, ...rest }) => {
-  const navigate = useNavigate();
-
-  const handleClick = () => {
-    if (!active) {
-      navigate(path);
-    }
-    onClose();
-  };
-
+const NavItem = ({ icon, path, onClose, active, children, ...rest }) => {
+  const history = useHistory();
   return (
     <Box
-      onClick={handleClick}
+      onClick={() => !active && history.push(path)}
       style={{ textDecoration: "none" }}
       _focus={{ boxShadow: "none" }}
     >
@@ -254,6 +231,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, path, onClose, active, children
         }}
         bg={active ? "#03ABAC" : "white"}
         color={active ? "white" : "black"}
+        onClick={onClose}
         {...rest}
       >
         {icon && (

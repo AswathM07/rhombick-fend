@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -15,7 +16,8 @@ import {
 } from "@chakra-ui/react";
 import { ErrorMessage, Form, Formik } from "formik";
 import * as Yup from "yup";
-import { useNavigate, useParams } from "react-router-dom";
+import { useHistory } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import axios from "axios";
 import {
   Country,
@@ -25,38 +27,21 @@ import {
   IState,
   ICity,
 } from "country-state-city";
+import { API_BASE_URL } from "../constant";
 
 interface RouteParams {
   id?: string;
-}
-
-interface Address {
-  country: string;
-  state: string;
-  city: string;
-  postalCode: string;
-  street: string;
-}
-
-interface FormValues {
-  customerId: string;
-  customerName: string;
-  managerName: string;
-  email: string;
-  phoneNumber: string;
-  gstNumber: string;
-  address: Address;
 }
 
 const NewCustomer: React.FC = () => {
   const { id } = useParams<RouteParams>();
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
-  const navigate = useNavigate();
-  const [countryList, setCountryList] = useState<ICountry[]>([]);
-  const [stateList, setStateList] = useState<IState[]>([]);
-  const [cityList, setCityList] = useState<ICity[]>([]);
-  const [initialValues, setInitialValues] = useState<FormValues>({
+  const history = useHistory();
+  const [countryList, setCountryList] = useState<ICountry | []>([]);
+  const [stateList, setStateList] = useState<IState | []>([]);
+  const [cityList, setCityList] = useState<ICity | []>([]);
+  const [initialValues, setInitialValues] = useState({
     customerId: "",
     customerName: "",
     managerName: "",
@@ -72,29 +57,22 @@ const NewCustomer: React.FC = () => {
     },
   });
 
-  const fetchCustomerForId = async () => {
+  const fetchCustomer = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(
-        "https://rhombick-bend.onrender.com/api/customers"
-      );
+      const response = await axios(`${API_BASE_URL}/customers`);
       const fetchCustNo = response.data;
       if (fetchCustNo.length > 0) {
         const maxNumber = Math.max(
           ...fetchCustNo.map((item: any) => {
             const raw = (item.customerId || "").toUpperCase();
-            const num = parseInt(raw.replace("CUST", ""), 10);
+            const num = parseInt(raw.replace("CUST-", ""), 10);
             return isNaN(num) ? 0 : num;
           })
         );
         setInitialValues({
           ...initialValues,
-          customerId: maxNumber ? `CUST${(maxNumber + 1).toString().padStart(3, '0')}` : "CUST001",
-        });
-      } else {
-        setInitialValues({
-          ...initialValues,
-          customerId: "CUST001",
+          customerId: maxNumber ? `CUST-${maxNumber + 1}` : "CUST-1",
         });
       }
     } catch (error) {
@@ -115,7 +93,7 @@ const NewCustomer: React.FC = () => {
     const countries = Country.getAllCountries();
     setCountryList(countries);
     if (!id) {
-      fetchCustomerForId();
+      fetchCustomer();
     }
   }, []);
 
@@ -123,18 +101,14 @@ const NewCustomer: React.FC = () => {
     const fetchCustomer = async () => {
       if (id) {
         try {
-          const res = await axios.get(
-            `https://rhombick-bend.onrender.com/api/customers/${id}`
-          );
+          const res = await axios.get(`${API_BASE_URL}/customers/${id}`);
           const data = res.data;
           setInitialValues({
             customerId: data.customerId || "",
             customerName: data.customerName || "",
-            managerName: data.manager
-              ? `${data.manager.firstName} ${data.manager.lastName || ""}`.trim()
-              : "",
+            managerName: data.managerName || "",
             email: data.email || "",
-            phoneNumber: data.phoneNumber?.toString() || "",
+            phoneNumber: data.phoneNumber || "",
             gstNumber: data.gstNumber || "",
             address: {
               country: data.address?.country || "",
@@ -159,36 +133,13 @@ const NewCustomer: React.FC = () => {
     fetchCustomer();
   }, [id]);
 
-  const handleSubmit = async (values: FormValues) => {
+  const handleSubmit = async (values) => {
     try {
       setIsLoading(true);
-      
-      const managerNameParts = values.managerName?.split(' ') || [];
-      const manager = values.managerName ? {
-        firstName: managerNameParts[0],
-        lastName: managerNameParts.slice(1).join(' ') || ''
-      } : undefined;
-      
-      const payload = {
-        customerId: values.customerId,
-        customerName: values.customerName,
-        email: values.email,
-        phoneNumber: Number(values.phoneNumber),
-        gstNumber: values.gstNumber,
-        manager: manager,
-        address: values.address
-      };
-
       if (id) {
-        await axios.put(
-          `https://rhombick-bend.onrender.com/api/customers/${id}`,
-          payload
-        );
+        await axios.put(`${API_BASE_URL}/customers/${id}`, values);
       } else {
-        await axios.post(
-          "https://rhombick-bend.onrender.com/api/customers",
-          payload
-        );
+        await axios.post(`${API_BASE_URL}/customers`, values);
       }
       toast({
         title: id
@@ -199,7 +150,7 @@ const NewCustomer: React.FC = () => {
         isClosable: true,
         position: "top-right",
       });
-      navigate("/customer");
+      history.push("/customer");
     } catch (err) {
       setIsLoading(false);
       toast({
@@ -217,12 +168,8 @@ const NewCustomer: React.FC = () => {
     customerName: Yup.string().required("Customer Name is required"),
     managerName: Yup.string().required("Manager Name is required"),
     email: Yup.string().email().required("Email is required"),
-    phoneNumber: Yup.string()
-      .required("Phone number is required")
-      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
-    gstNumber: Yup.string()
-      .required("GST number is required")
-      .matches(/^\d{10}$/, "GST number must be 10 digits"),
+    phoneNumber: Yup.string().required("Phone number is required"),
+    gstNumber: Yup.string().required("GST number is required"),
     address: Yup.object().shape({
       country: Yup.string().required("Country is required"),
       state: Yup.string().required("State is required"),
@@ -243,7 +190,7 @@ const NewCustomer: React.FC = () => {
         initialValues={initialValues}
         enableReinitialize={true}
         validationSchema={validationSchema}
-        onSubmit={handleSubmit}
+        onSubmit={(values) => handleSubmit(values)}
       >
         {({ values, handleChange }) => (
           <Form>
@@ -331,11 +278,12 @@ const NewCustomer: React.FC = () => {
                   <Box w="100%">
                     <Input
                       name="phoneNumber"
-                      type="text"
+                      type="number"
                       placeholder="Enter Phone Number"
                       onChange={handleChange}
                       value={values.phoneNumber}
                     />
+
                     <ErrorMessage
                       name="phoneNumber"
                       component="div"
@@ -348,11 +296,12 @@ const NewCustomer: React.FC = () => {
                   <Box w="100%">
                     <Input
                       name="gstNumber"
-                      type="text"
+                      type="number"
                       placeholder="Enter GST Number"
                       onChange={handleChange}
                       value={values.gstNumber}
                     />
+
                     <ErrorMessage
                       name="gstNumber"
                       component="div"
@@ -383,7 +332,7 @@ const NewCustomer: React.FC = () => {
                     const states =
                       State.getStatesOfCountry(selectedCountryCode);
                     setStateList(states);
-                    setCityList([]);
+                    setCityList([]); // Reset cities
                   }}
                 >
                   {countryList.map((country) => (
@@ -483,7 +432,7 @@ const NewCustomer: React.FC = () => {
               <Button
                 variant="outline"
                 type="reset"
-                onClick={() => navigate("/customer")}
+                onClick={() => history.push("/customer")}
               >
                 Cancel
               </Button>
@@ -493,7 +442,7 @@ const NewCustomer: React.FC = () => {
                 _hover={{ bg: "gray.800" }}
                 type="submit"
                 ml={2}
-                isLoading={isLoading}
+                disabled={isLoading}
               >
                 {id ? "Update" : "Save"}
               </Button>
