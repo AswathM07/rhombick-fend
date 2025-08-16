@@ -113,17 +113,17 @@ const NewInvoice = () => {
         setIsLoading(true);
         // Fetch customers
         const customersRes = await axios.get(`${API_BASE_URL}/customers`);
-        setCustomers(customersRes.data);
+        setCustomers(customersRes.data.data);
 
         // If editing, fetch invoice data
         if (id) {
           const invoiceRes = await axios.get(`${API_BASE_URL}/invoices/${id}`);
-          const invoiceData = invoiceRes.data?.invoice;
+          const invoiceData = invoiceRes.data?.data;
 
           // Find the customer details
           const customer =
             typeof invoiceData.customer === "string"
-              ? customersRes.data.find(
+              ? customersRes.data.data.find(
                   (c: CustomerType) => c._id === invoiceData.customer
                 )
               : invoiceData.customer;
@@ -169,7 +169,7 @@ const NewInvoice = () => {
             const maxNumber = Math.max(
               ...fetchInvoiceNo.map((item: any) => {
                 const raw = (item.invoiceNo || "").toUpperCase();
-                const num = parseInt(raw.replace("INV-", ""), 10);
+                const num = parseInt(raw.replace("INV-2025", ""), 10);
                 return isNaN(num) ? 0 : num;
               })
             );

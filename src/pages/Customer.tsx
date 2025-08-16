@@ -69,9 +69,9 @@ const Customer = () => {
         `${API_BASE_URL}/customers?page=${currentPage}&limit=${rowsPerPage}&search=${searchTerm}`
       );
 
-      console.log(response.data);
-      setCustomerList(response?.data);
-      // setTotalItems(response.data.pagination.total);
+      console.log(response.data.data);
+      setCustomerList(response?.data.data);
+      setTotalItems(response.data.pagination.total);
     } catch (error) {
       toast({
         title: "Failed to fetch customer details",

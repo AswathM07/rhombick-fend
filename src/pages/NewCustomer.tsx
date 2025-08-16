@@ -61,7 +61,7 @@ const NewCustomer: React.FC = () => {
     try {
       setIsLoading(true);
       const response = await axios(`${API_BASE_URL}/customers`);
-      const fetchCustNo = response.data;
+      const fetchCustNo = response.data.data;
       if (fetchCustNo.length > 0) {
         const maxNumber = Math.max(
           ...fetchCustNo.map((item: any) => {
@@ -102,7 +102,7 @@ const NewCustomer: React.FC = () => {
       if (id) {
         try {
           const res = await axios.get(`${API_BASE_URL}/customers/${id}`);
-          const data = res.data;
+          const data = res.data.data;
           setInitialValues({
             customerId: data.customerId || "",
             customerName: data.customerName || "",

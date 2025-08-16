@@ -126,8 +126,8 @@ const Invoice = () => {
       const response = await axios(
         `${API_BASE_URL}/invoices?page=${currentPage}&limit=${rowsPerPage}&search=${searchTerm}`
       );
-      setInvoiceList(response?.data);
-      // setTotalItems(response.data.pagination.total);
+      setInvoiceList(response?.data.data);
+      setTotalItems(response.data.pagination.total);
     } catch (error) {
       toast({
         title: "Failed to fetch invoice details",
@@ -158,7 +158,7 @@ const Invoice = () => {
       });
       fetchInvoice();
     } catch (error) {
-      const errorMsg = error?.response?.data?.error?.[0];
+      const errorMsg = error?.response?.data?.data.error?.[0];
       toast({
         title: "Failed to delete invoice",
         description: errorMsg ?? "",
