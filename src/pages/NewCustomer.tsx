@@ -103,6 +103,42 @@ const NewCustomer: React.FC = () => {
         try {
           const res = await axios.get(`${API_BASE_URL}/customers/${id}`);
           const data = res.data.data;
+          // Get all countries
+        const countries = Country.getAllCountries();
+        
+        // Find the country by name or ISO code
+        const countryObj = countries.find(c => 
+          c.name.toLowerCase() === data.address?.country?.toLowerCase() || 
+          c.isoCode === data.address?.country
+        );
+        
+        const countryCode = countryObj?.isoCode || '';
+        
+        // Get states for the country
+        let states: IState[] = [];
+        if (countryCode) {
+          states = State.getStatesOfCountry(countryCode);
+        }
+        
+        // Find the state by name or ISO code
+        let stateCode = data.address?.state || '';
+        if (countryCode && stateCode) {
+          const stateObj = states.find(s => 
+            s.name.toLowerCase() === stateCode?.toLowerCase() || 
+            s.isoCode === stateCode
+          );
+          stateCode = stateObj?.isoCode || stateCode;
+        }
+        
+        // Get cities for the state
+        let cities: ICity[] = [];
+        if (countryCode && stateCode) {
+          cities = City.getCitiesOfState(countryCode, stateCode);
+        }
+        
+        // Update the dropdown lists
+        setStateList(states);
+        setCityList(cities);
           setInitialValues({
             customerId: data.customerId || "",
             customerName: data.customerName || "",
@@ -296,7 +332,7 @@ const NewCustomer: React.FC = () => {
                   <Box w="100%">
                     <Input
                       name="gstNumber"
-                      type="number"
+                      type="Text"
                       placeholder="Enter GST Number"
                       onChange={handleChange}
                       value={values.gstNumber}

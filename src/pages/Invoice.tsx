@@ -38,6 +38,14 @@ interface CustomerType {
   email: string;
   phoneNumber: string;
   gstNumber: string;
+  managerName?: string;
+  address?: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
 }
 
 interface InvoiceType {
@@ -126,7 +134,26 @@ const Invoice = () => {
       const response = await axios(
         `${API_BASE_URL}/invoices?page=${currentPage}&limit=${rowsPerPage}&search=${searchTerm}`
       );
-      setInvoiceList(response?.data.data);
+        // Fetch customer details for each invoice
+    const invoicesWithCustomers = await Promise.all(
+      response.data.data.map(async (invoice: InvoiceType) => {
+        if (invoice.customer?._id) {
+          try {
+            const customerRes = await axios.get(`${API_BASE_URL}/customers/${invoice.customer._id}`);
+            return {
+              ...invoice,
+              customer: customerRes.data.data
+            };
+          } catch (error) {
+            console.error("Failed to fetch customer details", error);
+            return invoice; // Return original invoice if customer fetch fails
+          }
+        }
+        return invoice;
+      })
+    );
+
+    setInvoiceList(invoicesWithCustomers);
       setTotalItems(response.data.pagination.total);
     } catch (error) {
       toast({
