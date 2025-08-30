@@ -106,6 +106,51 @@ const NewInvoice = () => {
     totalAmount: 0,
   });
 
+  // Function to get financial year based on date
+  const getFinancialYear = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // January is 0
+    
+    // Financial year starts from April (month 4)
+    if (month >= 4) {
+      return `${year.toString().slice(2)}-${(year + 1).toString().slice(2)}`;
+    } else {
+      return `${(year - 1).toString().slice(2)}-${year.toString().slice(2)}`;
+    }
+  };
+
+  // Function to generate the next invoice number
+  const generateInvoiceNumber = (existingInvoices: any[]): string => {
+    const currentDate = new Date();
+    const financialYear = getFinancialYear(currentDate);
+    
+    // Filter invoices for the current financial year
+    const currentFYInvoices = existingInvoices.filter(invoice => {
+      if (!invoice.invoiceNo) return false;
+      
+      const invoiceParts = invoice.invoiceNo.split('/');
+      if (invoiceParts.length !== 2) return false;
+      
+      return invoiceParts[1] === financialYear;
+    });
+    
+    if (currentFYInvoices.length === 0) {
+      return `RT-001/${financialYear}`;
+    }
+    
+    // Extract and find the maximum invoice number
+    const invoiceNumbers = currentFYInvoices.map(invoice => {
+      const prefixPart = invoice.invoiceNo.split('/')[0];
+      const numberPart = prefixPart.replace('RT-', '');
+      return parseInt(numberPart, 10);
+    });
+    
+    const maxInvoiceNumber = Math.max(...invoiceNumbers);
+    const nextInvoiceNumber = (maxInvoiceNumber + 1).toString().padStart(3, '0');
+    
+    return `RT-${nextInvoiceNumber}/${financialYear}`;
+  };
+
   // Fetch customers and invoice data
   useEffect(() => {
     const fetchData = async () => {
@@ -121,13 +166,13 @@ const NewInvoice = () => {
           const invoiceData = invoiceRes.data?.data;
 
           // Find the customer in the already fetched customers list
-        const customerId = typeof invoiceData.customer === "string" 
-          ? invoiceData.customer 
-          : invoiceData.customer?._id;
-        
-        const customer = customersRes.data.data.find(
-          (c: CustomerType) => c._id === customerId
-        );
+          const customerId = typeof invoiceData.customer === "string" 
+            ? invoiceData.customer 
+            : invoiceData.customer?._id;
+          
+          const customer = customersRes.data.data.find(
+            (c: CustomerType) => c._id === customerId
+          );
 
           setInitialValues({
             ...invoiceData,
@@ -159,25 +204,28 @@ const NewInvoice = () => {
     fetchData();
   }, [id]);
 
+  // Fetch existing invoices to generate next invoice number
   useEffect(() => {
     if (!id) {
       const fetchInvoice = async () => {
         try {
           setIsLoading(true);
           const response = await axios(`${API_BASE_URL}/invoices`);
-          const fetchInvoiceNo = response.data.data;
-          if (fetchInvoiceNo.length > 0) {
-            const maxNumber = Math.max(
-              ...fetchInvoiceNo.map((item: any) => {
-                const raw = (item.invoiceNo || "").toUpperCase();
-                const num = parseInt(raw.replace("INV-", ""), 10);
-                return isNaN(num) ? 0 : num;
-              })
-            );
-            setInitialValues({
-              ...initialValues,
-              invoiceNo: maxNumber ? `INV-${maxNumber + 1}` : "INV-1",
-            });
+          const existingInvoices = response.data.data;
+          
+          if (existingInvoices.length > 0) {
+            const nextInvoiceNo = generateInvoiceNumber(existingInvoices);
+            setInitialValues(prev => ({
+              ...prev,
+              invoiceNo: nextInvoiceNo,
+            }));
+          } else {
+            // No existing invoices, start from RT-001 for current financial year
+            const financialYear = getFinancialYear(new Date());
+            setInitialValues(prev => ({
+              ...prev,
+              invoiceNo: `RT-001/${financialYear}`,
+            }));
           }
         } catch (error) {
           toast({
@@ -222,14 +270,6 @@ const NewInvoice = () => {
     const customer = customers.find((c) => c._id === customerId) || null;
     setSelectedCustomer(customer);
     setFieldValue("customer", customerId);
-
-    // Auto-set tax rates based on customer location
-    if (customer) {
-      const isSameState = customer?.address?.state === "YOUR_COMPANY_STATE"; // Replace with your company's state
-      setFieldValue("cgstRate", isSameState ? 9 : 0);
-      setFieldValue("sgstRate", isSameState ? 9 : 0);
-      setFieldValue("igstRate", isSameState ? 0 : 18);
-    }
   };
 
   const calculateAmounts = (values: InvoiceType) => {

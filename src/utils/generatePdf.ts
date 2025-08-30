@@ -62,7 +62,7 @@ export const generateInvoicePdf = (invoice: any) => {
         [`${invoice.customer.address.street}`, '', '', `Date: ${invoice.invoiceDate}`],
         [`${invoice.customer.address.city}, ${invoice.customer.address.state} - ${invoice.customer.address.zip}`, '', '', `PO No: ${invoice.poNo || '-'}`],
         [`Email: ${invoice.customer.email}`, '', '', `PO Date: ${invoice.poDate || '-'}`],
-        [`Ph No ${invoice.customer.phoneNumber}`, '', '', `DC No: ${invoice.dcNo || '-'}`],
+        ['', '', '', `DC No: ${invoice.dcNo || '-'}`],
         [`GST No: ${invoice.customer.gstNumber}`, '', '', `DC Date: ${invoice.dcDate || '-'}`]
       ],
       theme: 'plain',
