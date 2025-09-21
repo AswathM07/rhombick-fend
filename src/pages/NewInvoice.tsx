@@ -20,6 +20,9 @@ import {
   Grid,
   Divider,
   Spinner,
+  Radio,
+  RadioGroup,
+  Stack,
 } from "@chakra-ui/react";
 import { AddIcon, DeleteIcon } from "@chakra-ui/icons";
 import { ErrorMessage, Form, Formik } from "formik";
@@ -48,6 +51,7 @@ interface InvoiceItem {
   description: string;
   hsnSac: string;
   quantity: number;
+  UOM: string;
   rate: number;
   amount: number;
   _id?: string;
@@ -61,6 +65,7 @@ interface InvoiceType {
   poDate: string;
   dcNo: string;
   dcDate: string;
+  BillCredit: string;
   customer: string | CustomerType;
   items: InvoiceItem[];
   cgstRate: number;
@@ -81,6 +86,9 @@ const NewInvoice = () => {
   const toast = useToast();
   const history = useHistory();
 
+  // UOM options for dropdown
+  const uomOptions = ['PCS', 'KG', 'M', 'L', 'BOX', 'SET', 'PKT', 'ROLL', 'MTR', 'UNIT'];
+
   const [initialValues, setInitialValues] = useState<InvoiceType>({
     invoiceNo: "",
     invoiceDate: new Date().toISOString().split("T")[0],
@@ -88,12 +96,14 @@ const NewInvoice = () => {
     poDate: "",
     dcNo: "",
     dcDate: "",
+    BillCredit: "No",
     customer: "",
     items: [
       {
         description: "",
         hsnSac: "",
         quantity: 1,
+        UOM: "PCS",
         rate: 0,
         amount: 0,
       },
@@ -109,9 +119,8 @@ const NewInvoice = () => {
   // Function to get financial year based on date
   const getFinancialYear = (date: Date): string => {
     const year = date.getFullYear();
-    const month = date.getMonth() + 1; // January is 0
+    const month = date.getMonth() + 1;
     
-    // Financial year starts from April (month 4)
     if (month >= 4) {
       return `${year.toString().slice(2)}-${(year + 1).toString().slice(2)}`;
     } else {
@@ -124,7 +133,6 @@ const NewInvoice = () => {
     const currentDate = new Date();
     const financialYear = getFinancialYear(currentDate);
     
-    // Filter invoices for the current financial year
     const currentFYInvoices = existingInvoices.filter(invoice => {
       if (!invoice.invoiceNo) return false;
       
@@ -138,7 +146,6 @@ const NewInvoice = () => {
       return `RT-001/${financialYear}`;
     }
     
-    // Extract and find the maximum invoice number
     const invoiceNumbers = currentFYInvoices.map(invoice => {
       const prefixPart = invoice.invoiceNo.split('/')[0];
       const numberPart = prefixPart.replace('RT-', '');
@@ -156,16 +163,13 @@ const NewInvoice = () => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        // Fetch customers
         const customersRes = await axios.get(`${API_BASE_URL}/customers`);
         setCustomers(customersRes.data.data);
 
-        // If editing, fetch invoice data
         if (id) {
           const invoiceRes = await axios.get(`${API_BASE_URL}/invoices/${id}`);
           const invoiceData = invoiceRes.data?.data;
 
-          // Find the customer in the already fetched customers list
           const customerId = typeof invoiceData.customer === "string" 
             ? invoiceData.customer 
             : invoiceData.customer?._id;
@@ -176,6 +180,7 @@ const NewInvoice = () => {
 
           setInitialValues({
             ...invoiceData,
+            BillCredit: invoiceData.BillCredit || "No",
             customer: customerId?.toString() || "",
             invoiceDate:
               invoiceData.invoiceDate?.split("T")[0] ||
@@ -220,7 +225,6 @@ const NewInvoice = () => {
               invoiceNo: nextInvoiceNo,
             }));
           } else {
-            // No existing invoices, start from RT-001 for current financial year
             const financialYear = getFinancialYear(new Date());
             setInitialValues(prev => ({
               ...prev,
@@ -248,6 +252,7 @@ const NewInvoice = () => {
     invoiceNo: Yup.string().required("Invoice number is required"),
     invoiceDate: Yup.string().required("Invoice date is required"),
     customer: Yup.string().required("Customer is required"),
+    BillCredit: Yup.string().required("Bill Credit selection is required"),
     items: Yup.array().of(
       Yup.object().shape({
         description: Yup.string().required("Description is required"),
@@ -255,6 +260,7 @@ const NewInvoice = () => {
         quantity: Yup.number()
           .required("Quantity is required")
           .min(1, "Quantity must be at least 1"),
+        UOM: Yup.string().required("UOM is required"),
         rate: Yup.number()
           .required("Rate is required")
           .min(0, "Rate must be positive"),
@@ -292,10 +298,21 @@ const NewInvoice = () => {
     try {
       setIsLoading(true);
       const amounts = calculateAmounts(values);
+      
+      // Prepare the payload with proper field names
       const payload = {
         ...values,
         ...amounts,
+        // Ensure BillCredit is properly formatted
+        BillCredit: values.BillCredit,
+        // Ensure items have UOM field
+        items: values.items.map(item => ({
+          ...item,
+          UOM: item.UOM || "PCS" // Fallback to PCS if empty
+        }))
       };
+
+      console.log("Submitting payload:", payload); // Debug log
 
       if (id) {
         await axios.put(`${API_BASE_URL}/invoices/${id}`, payload);
@@ -318,6 +335,7 @@ const NewInvoice = () => {
       }
       history.push("/invoice");
     } catch (error) {
+      console.error("Submission error:", error);
       toast({
         title: id ? "Update failed" : "Creation failed",
         status: "error",
@@ -426,6 +444,25 @@ const NewInvoice = () => {
                     />
                   </FormControl>
 
+                  {/* Bill Credit Radio Buttons - FIXED */}
+                  <FormControl>
+                    <FormLabel>Bill Credit</FormLabel>
+                    <RadioGroup
+                      value={values.BillCredit}
+                      onChange={(value) => setFieldValue("BillCredit", value)}
+                    >
+                      <Stack direction="row">
+                        <Radio value="Yes">Yes</Radio>
+                        <Radio value="No">No</Radio>
+                      </Stack>
+                    </RadioGroup>
+                    <ErrorMessage
+                      name="BillCredit"
+                      component="div"
+                      className="error"
+                    />
+                  </FormControl>
+
                   <FormControl>
                     <FormLabel>Customer</FormLabel>
                     <Select
@@ -474,6 +511,7 @@ const NewInvoice = () => {
                         <Th>Description</Th>
                         <Th>HSN/SAC</Th>
                         <Th>Qty</Th>
+                        <Th>UOM</Th>
                         <Th>Rate</Th>
                         <Th>Amount</Th>
                         <Th>Action</Th>
@@ -529,6 +567,27 @@ const NewInvoice = () => {
                             />
                           </Td>
                           <Td>
+                            {/* UOM Dropdown - FIXED */}
+                            <Select
+                              name={`items.${index}.UOM`}
+                              value={item.UOM}
+                              onChange={(e) => {
+                                setFieldValue(`items.${index}.UOM`, e.target.value);
+                              }}
+                            >
+                              {uomOptions.map((uom) => (
+                                <option key={uom} value={uom}>
+                                  {uom}
+                                </option>
+                              ))}
+                            </Select>
+                            <ErrorMessage
+                              name={`items.${index}.UOM`}
+                              component="div"
+                              className="error"
+                            />
+                          </Td>
+                          <Td>
                             <Input
                               type="number"
                               name={`items.${index}.rate`}
@@ -577,6 +636,7 @@ const NewInvoice = () => {
                         description: "",
                         hsnSac: "",
                         quantity: 1,
+                        UOM: "PCS",
                         rate: 0,
                         amount: 0,
                       },
