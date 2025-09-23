@@ -26,9 +26,16 @@ import { PiStethoscopeFill } from "react-icons/pi";
 import { TbReportAnalytics } from "react-icons/tb";
 import { useHistory, useLocation } from "react-router-dom";
 import Logo from "./assets/logo_name.jpeg";
+import { useAuth } from "./auth/AuthContext";
 
 const Layout = ({ children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <>{children}</>;
+  }
+
   return (
     <Box minH="100vh">
       <Header onOpen={onOpen} />
@@ -67,6 +74,8 @@ const Layout = ({ children }) => {
 const Header = ({ onOpen }) => {
   const location = useLocation();
   const { pathname } = location;
+  const { user, logout } = useAuth();
+
   return (
     <Box
       display="flex"
@@ -119,12 +128,24 @@ const Header = ({ onOpen }) => {
           display={{ base: "none", md: "flex" }}
         />
         <Flex align="center" p={4} width="fit-content">
-          <Avatar name={`Aswath M`} src={""} size="sm" />
+          <Avatar name={user?.name || 'User'} src={""} size="sm" />
           <Box mx={2}>
             <Text fontSize="sm" fontWeight="bold">
-              Aswath M
+              {user?.name}
+            </Text>
+            <Text fontSize="xs" color="gray.600">
+              {user?.role}
             </Text>
           </Box>
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="red"
+            onClick={logout}
+            ml={2}
+          >
+            <BiLogOut />
+          </Button>
         </Flex>
       </Box>
     </Box>
@@ -135,27 +156,30 @@ const SidebarContent = ({ onClose, ...rest }) => {
   const location = useLocation();
   const history = useHistory();
   const { pathname } = location;
+  const { logout } = useAuth();
+
   const LinkItems = [
     {
       name: "Customer",
       icon: LuLayoutDashboard,
       path: "/customer",
       active: pathname.includes("/customer"),
-      roles: ["ADMIN"],
+      roles: ["admin", "user"],
     },
     {
       name: "Invoice",
       icon: BiNotepad,
       path: "/invoice",
       active: pathname.includes("/invoice"),
-      roles: ["ADMIN"],
+      roles: ["admin", "user"],
     },
   ];
-  // const handleLogout = (onClose) => {
-  //   onClose();
-  //   localStorage.clear();
-  //   history.push("/login");
-  // };
+
+  const handleLogout = () => {
+    logout();
+    history.push('/login');
+  };
+
   return (
     <Box
       bg={useColorModeValue("white", "gray.900")}
@@ -177,22 +201,18 @@ const SidebarContent = ({ onClose, ...rest }) => {
         <Image src={Logo} alt="Logo" height="50px" />
         <CloseButton display={{ base: "flex", md: "none" }} onClick={onClose} />
       </Flex>
-      {LinkItems.map(
-        (link) =>
-          link.roles.includes("ADMIN") && (
-            <NavItem
-              key={link.name}
-              icon={link.icon}
-              onClose={onClose}
-              path={link.path}
-              active={link.active}
-              roles={link.roles}
-            >
-              {link.name}
-            </NavItem>
-          )
-      )}
-      {/* <Button
+      {LinkItems.map((link) => (
+        <NavItem
+          key={link.name}
+          icon={link.icon}
+          onClose={onClose}
+          path={link.path}
+          active={link.active}
+        >
+          {link.name}
+        </NavItem>
+      ))}
+      <Button
         colorScheme="teal"
         variant="ghost"
         display={"flex"}
@@ -201,11 +221,11 @@ const SidebarContent = ({ onClose, ...rest }) => {
         w={"100%"}
         bg={"#f0ffff"}
         justifyContent={"left"}
-        onClick={() => handleLogout(onClose)}
+        onClick={handleLogout}
       >
         <BiLogOut size={18} style={{ marginRight: "10px", marginTop: "3px" }} />
         Logout
-      </Button> */}
+      </Button>
     </Box>
   );
 };

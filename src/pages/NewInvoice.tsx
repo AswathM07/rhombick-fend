@@ -108,8 +108,8 @@ const NewInvoice = () => {
         amount: 0,
       },
     ],
-    cgstRate: 0,
-    sgstRate: 0,
+    cgstRate: 9, // Set default values instead of 0
+    sgstRate: 9, // Set default values instead of 0
     igstRate: 0,
     subtotal: 0,
     taxAmount: 0,
@@ -187,6 +187,9 @@ const NewInvoice = () => {
               new Date().toISOString().split("T")[0],
             poDate: invoiceData.poDate?.split("T")[0] || "",
             dcDate: invoiceData.dcDate?.split("T")[0] || "",
+            cgstRate: invoiceData.cgstRate || 9, // Ensure values are set
+            sgstRate: invoiceData.sgstRate || 9, // Ensure values are set
+            igstRate: invoiceData.igstRate || 0,
           });
 
           if (customer) {
@@ -276,18 +279,27 @@ const NewInvoice = () => {
     const customer = customers.find((c) => c._id === customerId) || null;
     setSelectedCustomer(customer);
     setFieldValue("customer", customerId);
+    
+    // Auto-set IGST based on customer state (if customer is from different state)
+    if (customer) {
+      // You can add logic here to determine if IGST should be applied
+      // For now, we'll keep CGST/SGST as default
+      setFieldValue("cgstRate", 9);
+      setFieldValue("sgstRate", 9);
+      setFieldValue("igstRate", 0);
+    }
   };
 
   const calculateAmounts = (values: InvoiceType) => {
     const subtotal = values.items.reduce(
-      (sum, item) => sum + item.quantity * item.rate,
+      (sum, item) => sum + (item.quantity * item.rate),
       0
     );
     
     // Calculate individual tax components
-    const cgstAmount = (subtotal * values.cgstRate) / 100;
-    const sgstAmount = (subtotal * values.sgstRate) / 100;
-    const igstAmount = (subtotal * values.igstRate) / 100;
+    const cgstAmount = (subtotal * (values.cgstRate || 0)) / 100;
+    const sgstAmount = (subtotal * (values.sgstRate || 0)) / 100;
+    const igstAmount = (subtotal * (values.igstRate || 0)) / 100;
     
     const taxAmount = cgstAmount + sgstAmount + igstAmount;
     const totalAmount = subtotal + taxAmount;
@@ -310,15 +322,18 @@ const NewInvoice = () => {
       // Prepare the payload with proper field names
       const payload = {
         ...values,
-        ...amounts,
+        subtotal: amounts.subtotal,
+        taxAmount: amounts.taxAmount,
+        totalAmount: amounts.totalAmount,
         BillCredit: values.BillCredit,
         items: values.items.map(item => ({
           ...item,
-          uom: item.uom || "PCS"
+          uom: item.uom || "PCS",
+          amount: item.quantity * item.rate // Ensure amount is calculated
         }))
       };
 
-      console.log("Submitting payload:", payload); // Debug log
+      console.log("Submitting payload:", payload);
 
       if (id) {
         await axios.put(`${API_BASE_URL}/invoices/${id}`, payload);
@@ -340,10 +355,11 @@ const NewInvoice = () => {
         });
       }
       history.push("/invoice");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submission error:", error);
       toast({
         title: id ? "Update failed" : "Creation failed",
+        description: error.response?.data?.message || "Something went wrong",
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -352,6 +368,16 @@ const NewInvoice = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Custom handleChange for tax rates to ensure proper updates
+  const handleTaxRateChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFieldValue: any,
+    fieldName: string
+  ) => {
+    const value = parseFloat(e.target.value) || 0;
+    setFieldValue(fieldName, value);
   };
 
   return (
@@ -375,9 +401,6 @@ const NewInvoice = () => {
         >
           {({ values, handleChange, setFieldValue }) => {
             const amounts = calculateAmounts(values);
-
-            // Debug: Log current form values
-            console.log("Current form values:", values);
 
             return (
               <Form>
@@ -571,12 +594,10 @@ const NewInvoice = () => {
                             />
                           </Td>
                           <Td>
-                            {/* UOM Dropdown - FIXED: Use consistent dot notation */}
                             <Select
                               value={item.uom}
                               onChange={(e) => {
                                 const newUOM = e.target.value;
-                                console.log(`Setting UOM for item ${index} to:`, newUOM);
                                 setFieldValue(`items.${index}.uom`, newUOM);
                               }}
                             >
@@ -638,7 +659,7 @@ const NewInvoice = () => {
                         description: "",
                         hsnSac: "",
                         quantity: 1,
-                        uom: "",
+                        uom: "PCS",
                         rate: 0,
                         amount: 0,
                       },
@@ -661,7 +682,7 @@ const NewInvoice = () => {
                       type="number"
                       name="cgstRate"
                       value={values.cgstRate}
-                      onChange={handleChange}
+                      onChange={(e) => handleTaxRateChange(e, setFieldValue, "cgstRate")}
                     />
                   </FormControl>
 
@@ -671,7 +692,7 @@ const NewInvoice = () => {
                       type="number"
                       name="sgstRate"
                       value={values.sgstRate}
-                      onChange={handleChange}
+                      onChange={(e) => handleTaxRateChange(e, setFieldValue, "sgstRate")}
                     />
                   </FormControl>
 
@@ -681,7 +702,7 @@ const NewInvoice = () => {
                       type="number"
                       name="igstRate"
                       value={values.igstRate}
-                      onChange={handleChange}
+                      onChange={(e) => handleTaxRateChange(e, setFieldValue, "igstRate")}
                     />
                   </FormControl>
                 </Grid>
@@ -692,10 +713,9 @@ const NewInvoice = () => {
                     <Text>₹{amounts.subtotal.toFixed(2)}</Text>
                   </Flex>
                   
-                  {/* Updated Tax Amount Section */}
                   <Flex justifyContent="space-between" mb={1}>
                     <Text fontWeight="bold">Tax Amount:</Text>
-                    <Text></Text>
+                    <Text>₹{amounts.taxAmount.toFixed(2)}</Text>
                   </Flex>
                   
                   {values.cgstRate > 0 && (
