@@ -51,7 +51,7 @@ interface InvoiceItem {
   description: string;
   hsnSac: string;
   quantity: number;
-  UOM: string;
+  uom: string;
   rate: number;
   amount: number;
   _id?: string;
@@ -103,7 +103,7 @@ const NewInvoice = () => {
         description: "",
         hsnSac: "",
         quantity: 1,
-        UOM: "PCS",
+        uom: "PCS",
         rate: 0,
         amount: 0,
       },
@@ -260,7 +260,7 @@ const NewInvoice = () => {
         quantity: Yup.number()
           .required("Quantity is required")
           .min(1, "Quantity must be at least 1"),
-        UOM: Yup.string().required("UOM is required"),
+        uom: Yup.string().required("UOM is required"),
         rate: Yup.number()
           .required("Rate is required")
           .min(0, "Rate must be positive"),
@@ -283,12 +283,20 @@ const NewInvoice = () => {
       (sum, item) => sum + item.quantity * item.rate,
       0
     );
-    const taxAmount =
-      (subtotal * (values.cgstRate + values.sgstRate + values.igstRate)) / 100;
+    
+    // Calculate individual tax components
+    const cgstAmount = (subtotal * values.cgstRate) / 100;
+    const sgstAmount = (subtotal * values.sgstRate) / 100;
+    const igstAmount = (subtotal * values.igstRate) / 100;
+    
+    const taxAmount = cgstAmount + sgstAmount + igstAmount;
     const totalAmount = subtotal + taxAmount;
 
     return {
       subtotal,
+      cgstAmount,
+      sgstAmount,
+      igstAmount,
       taxAmount,
       totalAmount,
     };
@@ -303,12 +311,10 @@ const NewInvoice = () => {
       const payload = {
         ...values,
         ...amounts,
-        // Ensure BillCredit is properly formatted
         BillCredit: values.BillCredit,
-        // Ensure items have UOM field
         items: values.items.map(item => ({
           ...item,
-          UOM: item.UOM || "PCS" // Fallback to PCS if empty
+          uom: item.uom || "PCS"
         }))
       };
 
@@ -369,6 +375,9 @@ const NewInvoice = () => {
         >
           {({ values, handleChange, setFieldValue }) => {
             const amounts = calculateAmounts(values);
+
+            // Debug: Log current form values
+            console.log("Current form values:", values);
 
             return (
               <Form>
@@ -444,7 +453,6 @@ const NewInvoice = () => {
                     />
                   </FormControl>
 
-                  {/* Bill Credit Radio Buttons - FIXED */}
                   <FormControl>
                     <FormLabel>Bill Credit</FormLabel>
                     <RadioGroup
@@ -551,13 +559,9 @@ const NewInvoice = () => {
                               value={item.quantity}
                               onChange={(e) => {
                                 handleChange(e);
-                                const newQuantity =
-                                  parseFloat(e.target.value) || 0;
+                                const newQuantity = parseFloat(e.target.value) || 0;
                                 const newAmount = newQuantity * item.rate;
-                                setFieldValue(
-                                  `items.${index}.amount`,
-                                  newAmount
-                                );
+                                setFieldValue(`items.${index}.amount`, newAmount);
                               }}
                             />
                             <ErrorMessage
@@ -567,12 +571,13 @@ const NewInvoice = () => {
                             />
                           </Td>
                           <Td>
-                            {/* UOM Dropdown - FIXED */}
+                            {/* UOM Dropdown - FIXED: Use consistent dot notation */}
                             <Select
-                              name={`items.${index}.UOM`}
-                              value={item.UOM}
+                              value={item.uom}
                               onChange={(e) => {
-                                setFieldValue(`items.${index}.UOM`, e.target.value);
+                                const newUOM = e.target.value;
+                                console.log(`Setting UOM for item ${index} to:`, newUOM);
+                                setFieldValue(`items.${index}.uom`, newUOM);
                               }}
                             >
                               {uomOptions.map((uom) => (
@@ -582,7 +587,7 @@ const NewInvoice = () => {
                               ))}
                             </Select>
                             <ErrorMessage
-                              name={`items.${index}.UOM`}
+                              name={`items.${index}.uom`}
                               component="div"
                               className="error"
                             />
@@ -596,10 +601,7 @@ const NewInvoice = () => {
                                 handleChange(e);
                                 const newRate = parseFloat(e.target.value) || 0;
                                 const newAmount = item.quantity * newRate;
-                                setFieldValue(
-                                  `items.${index}.amount`,
-                                  newAmount
-                                );
+                                setFieldValue(`items.${index}.amount`, newAmount);
                               }}
                             />
                             <ErrorMessage
@@ -636,7 +638,7 @@ const NewInvoice = () => {
                         description: "",
                         hsnSac: "",
                         quantity: 1,
-                        UOM: "PCS",
+                        uom: "",
                         rate: 0,
                         amount: 0,
                       },
@@ -685,14 +687,40 @@ const NewInvoice = () => {
                 </Grid>
 
                 <Box p={4} borderWidth="1px" borderRadius="lg" bg="gray.50">
-                  <Flex justifyContent="space-between">
+                  <Flex justifyContent="space-between" mb={2}>
                     <Text fontWeight="bold">Subtotal:</Text>
                     <Text>₹{amounts.subtotal.toFixed(2)}</Text>
                   </Flex>
-                  <Flex justifyContent="space-between">
+                  
+                  {/* Updated Tax Amount Section */}
+                  <Flex justifyContent="space-between" mb={1}>
                     <Text fontWeight="bold">Tax Amount:</Text>
-                    <Text>₹{amounts.taxAmount.toFixed(2)}</Text>
+                    <Text></Text>
                   </Flex>
+                  
+                  {values.cgstRate > 0 && (
+                    <Flex justifyContent="space-between" mb={1} ml={4}>
+                      <Text>CGST ({values.cgstRate}%)</Text>
+                      <Text>₹{amounts.cgstAmount.toFixed(2)}</Text>
+                    </Flex>
+                  )}
+                  
+                  {values.sgstRate > 0 && (
+                    <Flex justifyContent="space-between" mb={1} ml={4}>
+                      <Text>SGST ({values.sgstRate}%)</Text>
+                      <Text>₹{amounts.sgstAmount.toFixed(2)}</Text>
+                    </Flex>
+                  )}
+                  
+                  {values.igstRate > 0 && (
+                    <Flex justifyContent="space-between" mb={2} ml={4}>
+                      <Text>IGST ({values.igstRate}%)</Text>
+                      <Text>₹{amounts.igstAmount.toFixed(2)}</Text>
+                    </Flex>
+                  )}
+                  
+                  <Divider mb={2} />
+                  
                   <Flex justifyContent="space-between" mt={2}>
                     <Text fontWeight="bold" fontSize="lg">
                       Total Amount:

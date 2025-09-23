@@ -18,6 +18,8 @@ const formatDate = (dateString: string) => {
   }
 };
 
+
+
 export const generateInvoicePdf = (invoice: any) => {
   try {
     const doc = new jsPDF();
@@ -50,6 +52,16 @@ export const generateInvoicePdf = (invoice: any) => {
     doc.text(`PAN: CLEPP3514M`, pageWidth / 1.5 , 25);
     doc.text(`GSTIN: 29CLEPP3514M1ZP`, pageWidth /1.5, 30);
     doc.text(`Phone: 8073540347`, pageWidth / 1.5 ,35);
+    // Calculate tax amounts
+    const subtotal = invoice.items.reduce((sum: number, item: any) => 
+      sum + (item.quantity * item.rate), 0
+    );
+    
+    const cgstAmount = (subtotal * (invoice.cgstRate || 0)) / 100;
+    const sgstAmount = (subtotal * (invoice.sgstRate || 0)) / 100;
+    const igstAmount = (subtotal * (invoice.igstRate || 0)) / 100;
+    const taxAmount = cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = subtotal + taxAmount;
 
 
 
@@ -59,16 +71,16 @@ export const generateInvoicePdf = (invoice: any) => {
       head: [['Billing To:', '', '', 'Invoice Details']],
       body: [
         [invoice.customer.customerName, '', '', `Invoice No: ${invoice.invoiceNo}`],
-        [`${invoice.customer.address.street}`, '', '', `Date: ${invoice.invoiceDate}`],
+        [`${invoice.customer.address.street}`, '', '', `Date: ${formatDate(invoice.invoiceDate)}`],
         [`${invoice.customer.address.city}, ${invoice.customer.address.state} - ${invoice.customer.address.zip}`, '', '', `PO No: ${invoice.poNo || '-'}`],
-        [`Email: ${invoice.customer.email}`, '', '', `PO Date: ${invoice.poDate || '-'}`],
+        [`Email: ${invoice.customer.email}`, '', '', `PO Date: ${formatDate(invoice.poDate) || '-'}`],
         ['', '', '', `DC No: ${invoice.dcNo || '-'}`],
-        [`GST No: ${invoice.customer.gstNumber}`, '', '', `DC Date: ${invoice.dcDate || '-'}`]
+        [`GST No: ${invoice.customer.gstNumber}`, '', '', `DC Date: ${formatDate(invoice.dcDate) || '-'}`]
       ],
       theme: 'plain',
       styles: { fontSize: 8, cellPadding: 1 },
       headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold' },
-      columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 'auto' } }
+      columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 40 }, 2: { cellWidth: 40 }, 3: { cellWidth: 40 } }
     });
 
     // 6. Add Items Table
@@ -79,14 +91,17 @@ export const generateInvoicePdf = (invoice: any) => {
         index + 1,
         item.description,
         item.hsnSac,
-        `${item.quantity} NOS`,
+        `${item.quantity} ${item.uom}`,
         `${item.rate.toFixed(2)}`,
         `${(item.quantity * item.rate).toFixed(2)}`
       ]),
       foot: [
         ['', '', '', 'Subtotal', '', `${invoice.subtotal.toFixed(2)}`],
-        ['', '', '', 'IGST (18%)', '', `${invoice.taxAmount.toFixed(2)}`],
-        ['', '', '', 'TOTAL', '', `${invoice.totalAmount.toFixed(2)}`]
+        ['', '', '', `CGST (${invoice.cgstRate || 0}%)`, '', `${cgstAmount.toFixed(2)}`],
+        ['', '', '', `SGST (${invoice.sgstRate || 0}%)`, '', `${sgstAmount.toFixed(2)}`],
+        ['', '', '', `IGST (${invoice.igstRate || 0}%)`, '', `${igstAmount.toFixed(2)}`],
+        ['', '', '', 'Total Tax', '', `${taxAmount.toFixed(2)}`],
+        ['', '', '', 'Total', '', `${invoice.totalAmount.toFixed(2)}`]
       ],
       theme: 'grid',
   styles: { 
